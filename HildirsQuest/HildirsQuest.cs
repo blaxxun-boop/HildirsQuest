@@ -4,6 +4,7 @@ using System.Reflection.Emit;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using JetBrains.Annotations;
 using ServerSync;
 using UnityEngine;
 
@@ -14,7 +15,7 @@ namespace HildirsQuest;
 public class HildirsQuest : BaseUnityPlugin
 {
 	private const string ModName = "HildirsQuest";
-	private const string ModVersion = "1.0.0";
+	private const string ModVersion = "1.0.1";
 	private const string ModGUID = "org.bepinex.plugins.hildirsquest";
 
 	private static readonly ConfigSync configSync = new(ModName) { DisplayName = ModName, CurrentVersion = ModVersion, MinimumRequiredVersion = ModVersion };
@@ -65,9 +66,17 @@ public class HildirsQuest : BaseUnityPlugin
 		private static readonly MethodInfo getKey = AccessTools.DeclaredMethod(typeof(ZoneSystem), nameof(ZoneSystem.GetGlobalKey), new[] { typeof(string) });
 		private static readonly MethodInfo setKey = AccessTools.DeclaredMethod(typeof(ZoneSystem), nameof(ZoneSystem.SetGlobalKey), new[] { typeof(string) });
 
+		[UsedImplicitly]
 		private static void setPlayerKey(ZoneSystem _, string key) => Player.m_localPlayer.m_customData[key] = "";
 
-		private static bool getPlayerKey(ZoneSystem _, string key) => Player.m_localPlayer.m_customData.ContainsKey(key);
+		private static bool getPlayerKey(ZoneSystem zoneSystem, string key, Trader trader)
+		{
+			if (Utils.GetPrefabName(trader.gameObject) == "Hildir")
+			{
+				return Player.m_localPlayer.m_customData.ContainsKey(key);
+			}
+			return zoneSystem.GetGlobalKey(key);
+		}
 
 		private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
 		{
@@ -75,6 +84,7 @@ public class HildirsQuest : BaseUnityPlugin
 			{
 				if (instruction.Calls(getKey))
 				{
+					yield return new CodeInstruction(OpCodes.Ldarg_0);
 					yield return new CodeInstruction(OpCodes.Call, AccessTools.DeclaredMethod(typeof(StorePlayerKey), nameof(getPlayerKey)));
 				}
 				else if (instruction.Calls(setKey))
